@@ -6,3 +6,5 @@ I've been looking at where to collect my data from. I think there are 3 places I
 - Reddit
 - Yahoo Finance
 - Alpha Vantage
+
+Let's set up some kind of pipelines that pulls data on any given day for AAPL.
