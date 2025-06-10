@@ -20,10 +20,3 @@ def call_openrouter(user_prompt, system_prompt="You are a helpful assistant.", m
     )
     
     return response.choices[0].message.content
-
-
-
-
-
-
- 
