@@ -60,5 +60,5 @@ def get_alpha_sentiment(ticker="AAPL", limit=20):
         return articles
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"Error: {e}")
         return []
