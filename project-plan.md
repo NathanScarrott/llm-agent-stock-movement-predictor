@@ -1,78 +1,114 @@
-# Project Title: Sentiment-Augmented Stock Prediction with Agentic AI
+# Multi-Agent Trading Orchestrator – Learning-Centric Plan
 
-## Objective
-Evaluate whether real-time sentiment data from news and social media improves stock price prediction compared to using price data alone. Leverage a decision-making agent to coordinate data ingestion, sentiment analysis, and prediction.
+## 0. Why This Exists
+I want a sandbox where **any ML model that emits trade signals can be plugged in** and evaluated in a realistic, end-to-end loop.  A team of specialised agents will gather data, run the models, combine the evidence, and let an executive agent decide whether to trade.
 
-## Step 1: Data Ingestion
+## 1. High-Level Architecture
+```mermaid
+flowchart TD
+    subgraph External
+        YF[Yahoo/Alpha News] ---|JSON| DataHarvester
+        Reddit[(Reddit)] --- DataHarvester
+        Prices[(Market API – 1 s … 1 d)] --- DataHarvester
+    end
 
-### 1.1 Sentiment Data Pipeline
-- Collect sentiment-rich text from sources like Twitter, Reddit, and Yahoo Finance.
-- Use APIs or scraping tools with time-stamped storage.
-- Save raw text for each time interval (e.g. hourly/daily).
-- Questions:
-  - Should ingestion be real-time or batch?
-  - Should the agent pull or receive data automatically?
+    subgraph Agents
+        DataHarvester --> SemanticSynth
+        DataHarvester --> HFAnalyst
+        DataHarvester --> LFAnalyst
+        SemanticSynth --> Chief
+        HFAnalyst --> Chief
+        LFAnalyst --> Chief
+        RiskMgr --> Chief
+    end
 
-### 1.2 Stock Price Data Pipeline
-- Ingest historical and live price data for a selected stock (AAPL).
-- Optionally collect multiple stocks for generalisation.
-- Sync time intervals with sentiment data.
+    Chief -->|order & rationale| BrokerSim[(Paper Broker / Exchange)]
+    Chief -->|logs| SQL[(Trade Log)]
+```
+* **DataHarvester** – one process, many connectors. Pulls both numerical market data (user-selectable symbol & timeframe) and textual news/social data, stores raw feeds.
+* **SemanticSynth** – turns raw text into embeddings + sentiment metrics (FinBERT/VADER/GPT-4o).
+* **HFAnalyst** – "High-frequency" analyst; runs any plug-in model on 1 s-1 min candles.
+* **LFAnalyst** – "Low-frequency" analyst; same idea but on 15 min-1 day bars.
+* **RiskMgr** – maintains position PnL, max drawdown, capital usage, feeds risk flags to Chief.
+* **Chief** – executive agent; merges all signals & risk state, decides **LONG / SHORT / FLAT**, emits trade size and a short reasoning string.
 
-## Step 2: Sentiment Processing
+## 2. Plug-in Model Interface (MVP)
+```python
+# models/<model_name>/model.py
+class TradeModel:
+    def __init__(self, config: dict):
+        ...
 
-- Apply sentiment analysis models (VADER, FinBERT, or custom LLM-based).
-- Extract numeric sentiment features per time window.
-- Store features alongside text metadata.
-- Optionally, allow the agent to select which model to use.
+    def predict(self, features: pd.DataFrame) -> dict:
+        """Return {timestamp, signal: -1|0|1, confidence: 0-1} """
+```
+* Drop the file in `models/<name>/`, declare it in `models/__init__.py`; agents discover via entry points.
+* Compatible with scikit-learn, PyTorch, LightGBM, or even a REST call – as long as `predict` returns the dictionary above.
 
-## Step 3: Feature Engineering
+## 3. Agent Toolbelt
+| Tool | Purpose | Who can call |
+|------|---------|-------------|
+| `MarketAPI` | pull OHLCV for symbol & timeframe | DataHarvester |
+| `NewsAPI` / `RedditAPI` | fetch text | DataHarvester |
+| `SentimentLLM` (GPT-4o on OpenRouter) | classify / summarise text | SemanticSynth |
+| `VectorStore` | save embeddings | SemanticSynth, Analysts |
+| `ModelRunner` | load & run plug-in models | HFAnalyst, LFAnalyst |
+| `SQLTradeLog` | store executed trades | Chief, RiskMgr |
+| `Broker` | paper-trade REST | Chief |
 
-- Combine price features (technical indicators) with sentiment features.
-- Align features chronologically and ensure no leakage.
-- Create multiple datasets:
-  - Price-only
-  - Price + Sentiment
-- Include contextual features (e.g. trading volume, volatility).
+Implementation: Python 3.11, `openai` SDK (pointed at OpenRouter), **custom asyncio orchestration (no LangChain)**, `pandas` & `polars` for data, `chromadb` for embeddings, `sqlmodel` for relational logs.
 
-## Step 4: Predictive Modelling
+## 4. Phase Plan (Learning-First)
+1. **Foundations**  
+   – Repo, venv/Poetry, Docker.  
+   – `.env` with API keys (OpenRouter, Polygon, Alpha).
+2. **Data Connectors**  
+   – MarketAPI wrapper (yfinance for equities, FTX/Bybit for crypto, etc.).  
+   – Reddit & Yahoo collectors (done!).
+3. **Sentiment Pipeline**  
+   – FinBERT baseline, GPT-4o classifier via `SentimentLLM` tool.  
+   – Embedding store.
+4. **Model Plug-in API**  
+   – Implement `TradeModel` interface.  
+   – Provide two sample models: moving-average cross & simple LightGBM.
+5. **Agent Prototypes**  
+   – HFAnalyst loads sample model, outputs signals every minute.  
+   – LFAnalyst runs hourly.  
+   – SemanticSynth produces sentiment score vector every 15 min.
+6. **Chief + RiskMgr**  
+   – "Rule-of-thumb" ensemble: majority vote, risk guardrails.  
+   – Paper-trade in SQLite.
+7. **Evaluation Dashboard**  
+   – Jupyter / Streamlit: equity curve, Sharpe, hit-rate, confusion matrix of signals.  
+   – Compare plug-ins easily.
+8. **Stretch**  
+   – FastAPI endpoints `/predict`, `/agents/status`.  
+   – Live Discord or Slack notifications.
 
-- Train baseline ML models on price-only features (e.g. Random Forest, XGBoost, or LSTM).
-- Train equivalent models with sentiment features added.
-- Compare performance (AUC, accuracy, precision/recall).
-- Optionally, evaluate using walk-forward validation or backtesting.
+## 5. Directory Skeleton
+```
+project/
+├─ tools/
+│  ├─ data_collectors/
+│  ├─ agents/
+│  ├─ models/        # plug-in folders
+│  └─ utils/
+├─ data/
+│  ├─ raw/
+│  └─ processed/
+├─ notebooks/
+└─ tests/
+```
 
-## Step 5: LLM Agent Design
+## 6. What I Still Need to Learn / Decide
+- Best orchestration lib: `langgraph` vs. `CrewAI` vs. plain asyncio.  
+- How Chief fuses heterogenous signals (Bayesian model? weighted voting?).  
+- Risk budgeting maths (Kelly, CVaR?).  
+- Scaling beyond one symbol.
 
-### 5.1 Agent Functionality
-- Fetch and process new data
-- Monitor for drift or anomalies
-- Choose which model to use for predictions
-- Summarise outputs and confidence
-- Log reasoning and decision process
-
-### 5.2 Agent Tooling
-- Tools: sentiment scorer, model selector, forecasting module, visualiser
-- Framework: custom or LangChain-based
-- Implement memory or intermediate state tracking
-
-## Step 6: Evaluation and Interpretation
-
-- Evaluate model performance with vs without sentiment.
-- Evaluate agent's decision-making accuracy and success rate.
-- Conduct case studies where sentiment made a difference.
-- Data drift detector.
-- Explore failure cases and suggest improvements.
-
-## Step 7: Final Deliverables
-
-- Notebook/Script pipeline end-to-end
-- Visualisations of performance and impact of sentiment
-- Documentation of methodology and agent behaviour
-- Reflections on what you learned about sentiment and market prediction
-
-## Success Criteria
-
-- You can explain the role of sentiment in your model.
-- The agent coordinates meaningful components of the pipeline.
-- You've explored tradeoffs and made realistic conclusions.
+## 7. Success Criteria
+1. Any new model dropped into `models/` can be selected via a config and run without code changes.  
+2. Chief agent logs reasoning, action, and PnL for each decision.  
+3. Clear comparison of performance with/without sentiment features.  
+4. I understand the trade-offs and can explain each agent's role.
 
