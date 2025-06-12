@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-def call_openrouter(user_prompt, system_prompt="You are a helpful assistant.", model="openai/gpt-4o"):
+def call_openrouter(user_prompt, system_prompt="You are a helpful assistant.", model="openai/gpt-4o", temperature=0.4):
     client = OpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -16,7 +16,7 @@ def call_openrouter(user_prompt, system_prompt="You are a helpful assistant.", m
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ],
-        temperature=0.1
+        temperature=temperature
     )
     
     return response.choices[0].message.content

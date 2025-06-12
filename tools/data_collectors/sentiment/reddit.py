@@ -15,7 +15,7 @@ reddit = praw.Reddit(
     user_agent=os.getenv("REDDIT_USER_AGENT"),
 )
 
-def get_reddit_posts(subreddit_names, search_terms, time_filter="day", limit=5):
+def get_reddit_posts(subreddit_names, search_terms, time_filter="week", limit=5):
     print(f"Searching for '{search_terms}' in /r/{subreddit_names}")
     for subreddit_name in subreddit_names:
         subreddit = reddit.subreddit(subreddit_name)
