@@ -30,7 +30,7 @@ def analyze_sentiment_batch(
     ticker: str,
     source: str,  
     model: str = "gpt-4o-mini",
-    temperature: float = 0.5,
+    temperature: float = 0.2,
 ) -> str:
     raw_news = get_sentiment_news(ticker, source)
 
@@ -107,20 +107,20 @@ def analyze_sentiment_batch(
 
     Then, give a score between 0 and 10 for the overall sentiment of the news articles considering the sentiment of each news and the importance of each news article.
 
+    Afterwards, evaluate how varied the opinions are across the news articles. Give a score between 0 and 10 where 0 means all articles share the same viewpoint and 10 means opinions are highly divergent. Do this in <diversity_score> tags.
+
     Afterwards, summarise your findings ensuring to include all relevant and important information.
 
-    Return the sentiment score for each news article and the overall sentiment score between <answer> tags in the following JSON format:
+    Return the sentiment score for each news article, the overall sentiment score, and the opinion diversity score between <answer> tags in the following JSON format:
 
     <answer>
     {{
         "summary": "summary of the news articles",
-        "overall_sentiment_score": "score between 0 and 10"
+        "overall_sentiment_score": "score between 0 and 10",
+        "opinion_diversity_score": "score between 0 and 10"
     }}
     </answer>
     """
-    print("--------------------------------")
-    print(prompt)
-    print("--------------------------------")
 
     response = call_openrouter(
         prompt,
@@ -129,3 +129,4 @@ def analyze_sentiment_batch(
         temperature=temperature
     )
     return response
+
